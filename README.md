@@ -40,7 +40,21 @@ npx drizzle-kit push
 curl -X POST http://localhost:3000/api/seed
 ```
 
-## API Design
+## API Design & Performance Architecture
+
+This API is designed to handle large-scale data efficiently, supporting hundreds of thousands of advocate records with optimal performance.
+
+### Performance Considerations
+
+#### Database Connection Pooling
+- **Connection Pool Size**: 100 maximum connections configured for high-concurrency scenarios
+- **Why**: Handles hundreds of thousands of database rows efficiently by reusing connections
+- **Benefits**: Reduces connection overhead, prevents connection exhaustion under heavy load
+
+#### Pagination Strategy
+- **Mandatory Pagination**: All list endpoints use cursor-based pagination to prevent memory issues
+- **Limit Constraints**: Maximum 100 records per request to maintain response times under high data volumes
+- **Why**: Loading hundreds of thousands of records without pagination would cause memory exhaustion and poor user experience
 
 ### Advocates Endpoint
 
@@ -79,9 +93,19 @@ Retrieves a paginated list of advocates with their details.
 }
 ```
 
+#### Authentication
+
+All endpoints require JWT authentication:
+
+**Headers Required:**
+```
+Authorization: Bearer <jwt_token>
+```
+
 #### Error Handling
 
 - **400 Bad Request**: Returns when pagination parameters are invalid (page < 1, limit < 1, or limit > 100)
+- **401 Unauthorized**: Returns when JWT token is missing or invalid
 - **500 Internal Server Error**: Returns when database connections fail or other unexpected server errors occur
 - All errors are logged to the console for debugging purposes
 
@@ -92,8 +116,45 @@ Example error responses:
   "error": "Invalid pagination parameters"
 }
 
+// Unauthorized
+{
+  "error": "Unauthorized - Valid JWT token required"
+}
+
 // Server error
 {
   "error": "Internal server error"
 }
 ```
+
+## Authentication
+
+### Login Endpoint
+
+**POST** `/api/auth/login`
+
+Authenticates users and returns a JWT token for API access.
+
+#### Request Body
+```json
+{
+  "username": "admin",
+  "password": "testadmin@1234"
+}
+```
+
+#### Response Format
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "username": "admin",
+    "role": "admin"
+  }
+}
+```
+
+#### Security Features
+- **JWT Tokens**: 24-hour expiration for security
+- **Protected Routes**: All data endpoints require valid JWT
+- **Role-based Access**: Token includes user role for future authorization
