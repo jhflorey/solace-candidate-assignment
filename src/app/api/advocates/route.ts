@@ -2,9 +2,16 @@ import db from "../../../db";
 import { advocates } from "../../../db/schema";
 import { advocateData } from "../../../db/seed/advocates";
 import { asc, count } from "drizzle-orm";
+import { validateJWT, createAuthErrorResponse } from "../../../lib/auth";
 
 export async function GET(request: Request) {
   try {
+    // Validate JWT token
+    const { valid } = await validateJWT(request);
+    if (!valid) {
+      return createAuthErrorResponse();
+    }
+
     const { searchParams } = new URL(request.url);
 
     // Parse pagination parameters

@@ -11,8 +11,10 @@ const setup = () => {
     };
   }
 
-  // for query purposes
-  const queryClient = postgres(process.env.DATABASE_URL);
+  // for query purposes with connection pooling
+  const queryClient = postgres(process.env.DATABASE_URL, {
+    max: 100, // Maximum number of connections in pool
+  });
   const db = drizzle(queryClient);
   return db;
 };
