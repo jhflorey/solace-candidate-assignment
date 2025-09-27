@@ -52,8 +52,9 @@ export async function GET(request: Request) {
       ilike(advocates.lastName, `%${search}%`),
       ilike(advocates.city, `%${search}%`),
       ilike(advocates.degree, `%${search}%`),
-      sql`${advocates.yearsOfExperience}::text ILIKE ${`%${search}%`}`,
-      sql`${advocates.phoneNumber}::text ILIKE ${`%${search}%`}`
+      // Cast numeric columns to text for ILIKE search using parameterized queries
+      sql`${advocates.yearsOfExperience}::text ILIKE ${'%' + search + '%'}`,
+      sql`${advocates.phoneNumber}::text ILIKE ${'%' + search + '%'}`
     ) : undefined;
 
     // Get total count for pagination metadata
