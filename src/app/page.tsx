@@ -1,91 +1,155 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { App, Button, Flex, Input, Table, Typography } from "antd";
+import { debounce } from "lodash";
+
+const MAX_SEARCH_LENGTH = 100;
+const DEBOUNCED_INPUT_WAIT_TIME_MS = 500;
 
 export default function Home() {
-  const [advocates, setAdvocates] = useState([]);
-  const [filteredAdvocates, setFilteredAdvocates] = useState([]);
+  const [data, setData] = useState<IAdvocate[]>([]);
+  const [search, setSearch] = useState("");
+  const [paging, setPaging] = useState({ page: 1, limit: 10, total: 0 });
+  const [loading, setLoading] = useState(false);
+  const [token, setToken] = useState("");
+
+  const { message } = App.useApp();
 
   useEffect(() => {
-    console.log("fetching advocates...");
-    fetch("/api/advocates").then((response) => {
-      response.json().then((jsonResponse) => {
-        setAdvocates(jsonResponse.data);
-        setFilteredAdvocates(jsonResponse.data);
-      });
-    });
-  }, []);
+    const fetchData = async () => {
+      setLoading(true);
+              console.log(token)
+      const response: {
+        data: IAdvocate[];
+        pagination: IPagination;
+      } = await (
 
-  const onChange = (e) => {
-    const searchTerm = e.target.value;
+        await fetch(
+          `/api/advocates?page=${paging.page}&limit=${
+            paging.limit
+          }&search=${encodeURIComponent(search)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        )
+      ).json();
+      setData(response.data);
+      setPaging(response.pagination);
+      setLoading(false);
+    };
+    if (token) fetchData();
+  }, [paging.page, paging.limit, search, token]);
 
-    document.getElementById("search-term").innerHTML = searchTerm;
+  const onDebouncedInputChange = useMemo(
+    () => debounce((v: string) => setSearch(v), DEBOUNCED_INPUT_WAIT_TIME_MS),
+    []
+  );
 
-    console.log("filtering advocates...");
-    const filteredAdvocates = advocates.filter((advocate) => {
-      return (
-        advocate.firstName.includes(searchTerm) ||
-        advocate.lastName.includes(searchTerm) ||
-        advocate.city.includes(searchTerm) ||
-        advocate.degree.includes(searchTerm) ||
-        advocate.specialties.includes(searchTerm) ||
-        advocate.yearsOfExperience.includes(searchTerm)
-      );
-    });
+  const onChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) =>
+      onDebouncedInputChange(e.target.value),
+    [onDebouncedInputChange]
+  );
 
-    setFilteredAdvocates(filteredAdvocates);
-  };
+  const handleSignIn = useCallback(async () => {
+    try {
+      const response = await (
+        await fetch(`/api/auth/login`, {
+          method: "POST",
+          body: JSON.stringify({
+            username: "admin",
+            password: "testadmin@1234",
+          }),
+        })
+      ).json();
+      setToken(response.token);
+    } catch {
+      message.error("Can't get token");
+    }
+  }, [message]);
 
-  const onClick = () => {
-    console.log(advocates);
-    setFilteredAdvocates(advocates);
-  };
+  if (!token)
+    return (
+      <div
+        style={{
+          width: "100vw",
+          height: "100vh",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <Button size="large" type="primary" onClick={handleSignIn}>
+          Sign in
+        </Button>
+      </div>
+    );
 
   return (
     <main style={{ margin: "24px" }}>
-      <h1>Solace Advocates</h1>
-      <br />
-      <br />
+      <Typography.Title level={2}>Solace Advocates</Typography.Title>
       <div>
-        <p>Search</p>
-        <p>
-          Searching for: <span id="search-term"></span>
-        </p>
-        <input style={{ border: "1px solid black" }} onChange={onChange} />
-        <button onClick={onClick}>Reset Search</button>
+        <Flex className="mb-4">
+          <Input
+            maxLength={MAX_SEARCH_LENGTH}
+            placeholder="Enter search query"
+            onChange={onChange}
+          />
+          <Button
+            loading={loading}
+            className="ml-4"
+            onClick={() => setSearch("")}
+          >
+            Reset Search
+          </Button>
+        </Flex>
       </div>
-      <br />
-      <br />
-      <table>
-        <thead>
-          <th>First Name</th>
-          <th>Last Name</th>
-          <th>City</th>
-          <th>Degree</th>
-          <th>Specialties</th>
-          <th>Years of Experience</th>
-          <th>Phone Number</th>
-        </thead>
-        <tbody>
-          {filteredAdvocates.map((advocate) => {
-            return (
-              <tr>
-                <td>{advocate.firstName}</td>
-                <td>{advocate.lastName}</td>
-                <td>{advocate.city}</td>
-                <td>{advocate.degree}</td>
-                <td>
-                  {advocate.specialties.map((s) => (
-                    <div>{s}</div>
-                  ))}
-                </td>
-                <td>{advocate.yearsOfExperience}</td>
-                <td>{advocate.phoneNumber}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+
+      <p style={{ opacity: !!search ? 1 : 0 }}>
+        Showing result for: <span id="search-term">{search}</span>
+      </p>
+
+      <Table
+        rowKey="id"
+        loading={loading}
+        dataSource={data}
+        onChange={(p) =>
+          setPaging({
+            limit: p.pageSize || 10,
+            page: p.current || 1,
+            total: paging.total,
+          })
+        }
+        pagination={{
+          current: paging.page,
+          pageSize: paging.limit,
+          total: 15,
+          showSizeChanger: true,
+        }}
+        columns={[
+          { title: "First Name", dataIndex: "firstName" },
+          { title: "Last Name", dataIndex: "lastName" },
+          { title: "City", dataIndex: "city" },
+          { title: "Degree", dataIndex: "degree" },
+          {
+            title: "Specialities",
+            dataIndex: "specialties",
+            render: (specialties: string[]) => (
+              <>
+                {specialties.map((s) => (
+                  <div key={s}>{s}</div>
+                ))}
+              </>
+            ),
+          },
+          { title: "Years of Experience", dataIndex: "yearsOfExperience" },
+          { title: "Phone Number", dataIndex: "phoneNumber" },
+        ]}
+      />
     </main>
   );
 }
