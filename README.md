@@ -65,6 +65,7 @@ Retrieves a paginated list of advocates with their details.
 #### Query Parameters
 - `page` (optional): Page number (default: 1, minimum: 1)
 - `limit` (optional): Number of items per page (default: 10, minimum: 1, maximum: 100)
+- `search` (optional): Search term to filter across multiple columns (firstName, lastName, city, degree, yearsOfExperience, phoneNumber)
 
 #### Response Format
 ```json
@@ -158,3 +159,42 @@ Authenticates users and returns a JWT token for API access.
 - **JWT Tokens**: 24-hour expiration for security
 - **Protected Routes**: All data endpoints require valid JWT
 - **Role-based Access**: Token includes user role for future authorization
+
+## API Usage Examples
+
+### Login and Search Workflow
+
+```bash
+# 1. Login to get JWT token
+TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "testadmin@1234"}' | \
+  jq -r '.token')
+
+# 2. Search advocates by name
+curl -X GET "http://localhost:3000/api/advocates?search=john&page=1&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+
+# 3. Search by city
+curl -X GET "http://localhost:3000/api/advocates?search=york&page=1&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+
+# 4. Search by degree
+curl -X GET "http://localhost:3000/api/advocates?search=JD&page=1&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+
+# 5. Search by years of experience
+curl -X GET "http://localhost:3000/api/advocates?search=5&page=1&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+
+# 6. Get all advocates (no search)
+curl -X GET "http://localhost:3000/api/advocates?page=1&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Search Capabilities
+- **Multi-column Search**: Single search term searches across firstName, lastName, city, degree, yearsOfExperience, and phoneNumber
+- **Case-insensitive**: Search is not case sensitive
+- **Partial Matches**: Supports partial text matching (e.g., "york" matches "New York")
+- **Numeric Search**: Can search years of experience and phone numbers as text
+- **Performance Optimized**: Designed to handle hundreds of thousands of records efficiently

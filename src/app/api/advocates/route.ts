@@ -1,7 +1,7 @@
 import db from "../../../db";
 import { advocates } from "../../../db/schema";
 import { advocateData } from "../../../db/seed/advocates";
-import { asc, count } from "drizzle-orm";
+import { asc, count, sql, or, ilike } from "drizzle-orm";
 import { validateJWT, createAuthErrorResponse } from "../../../lib/auth";
 
 export async function GET(request: Request) {
@@ -19,6 +19,9 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = (page - 1) * limit;
 
+    // Parse search parameter
+    const search = searchParams.get('search')?.trim() || '';
+
     // Validate pagination parameters
     if (page < 1 || limit < 1 || limit > 100) {
       return Response.json(
@@ -27,14 +30,44 @@ export async function GET(request: Request) {
       );
     }
 
+    // Validate search query
+    if (search && (search.length > 100)) {
+      return Response.json(
+        { error: 'Search query must be larger than 100 characters' },
+        { status: 400 }
+      );
+    }
+
+    // Block searches with only special characters
+    if (search && /^[^a-zA-Z0-9\s]+$/.test(search)) {
+      return Response.json(
+        { error: 'Search query must contain alphanumeric characters' },
+        { status: 400 }
+      );
+    }
+
+    // Build search condition if search term provided - searches all text columns except specialties
+    const searchCondition = search ? or(
+      ilike(advocates.firstName, `%${search}%`),
+      ilike(advocates.lastName, `%${search}%`),
+      ilike(advocates.city, `%${search}%`),
+      ilike(advocates.degree, `%${search}%`),
+      sql`${advocates.yearsOfExperience}::text ILIKE ${`%${search}%`}`,
+      sql`${advocates.phoneNumber}::text ILIKE ${`%${search}%`}`
+    ) : undefined;
+
     // Get total count for pagination metadata
-    const [totalResult] = await db.select({ count: count() }).from(advocates);
+    const [totalResult] = await db
+      .select({ count: count() })
+      .from(advocates)
+      .where(searchCondition);
     const total = totalResult.count;
 
-    // Get advocates with ordering and pagination
+    // Get advocates with search, ordering and pagination
     const data = await db
       .select()
       .from(advocates)
+      .where(searchCondition)
       .orderBy(asc(advocates.id))
       .limit(limit)
       .offset(offset);
